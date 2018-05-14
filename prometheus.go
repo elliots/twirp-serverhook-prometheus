@@ -29,7 +29,7 @@ var (
 			Name: "rpc_requests_total",
 			Help: "Number of RPC requests received.",
 		},
-		[]string{"method"},
+		[]string{"package", "method"},
 	)
 
 	responsesSent = prometheus.NewCounterVec(
@@ -37,7 +37,7 @@ var (
 			Name: "rpc_responses_total",
 			Help: "Number of RPC responses sent.",
 		},
-		[]string{"method", "status"},
+		[]string{"package", "method", "status"},
 	)
 
 	rpcDurations = prometheus.NewSummaryVec(
@@ -46,7 +46,7 @@ var (
 			Help:       "RPC latency distributions.",
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		},
-		[]string{"method", "status"},
+		[]string{"package", "method", "status"},
 	)
 )
 
@@ -80,19 +80,22 @@ func NewServerHooks(registerer prometheus.Registerer) *twirp.ServerHooks {
 		if !ok {
 			return ctx, nil
 		}
-		requestsReceived.WithLabelValues(method).Inc()
+		pkg, _ := twirp.PackageName(ctx)
+
+		requestsReceived.WithLabelValues(pkg, method).Inc()
 		return ctx, nil
 	}
 
 	hooks.ResponseSent = func(ctx context.Context) {
 		method, _ := twirp.MethodName(ctx)
+		pkg, _ := twirp.PackageName(ctx)
 		status, _ := twirp.StatusCode(ctx)
 
-		responsesSent.WithLabelValues(method, status).Inc()
+		responsesSent.WithLabelValues(pkg, method, status).Inc()
 
 		if start, ok := getReqStart(ctx); ok {
 			dur := time.Now().Sub(start).Seconds()
-			rpcDurations.WithLabelValues(method, status).Observe(dur)
+			rpcDurations.WithLabelValues(pkg, method, status).Observe(dur)
 		}
 	}
 	return hooks
